@@ -438,6 +438,9 @@ resource "aws_db_instance" "rds" {
 ```
 ### Step 4 - Configuring Route53
 
+In this step, we create a private Route 53 zone with the name "ashna.local". The zone is associated with the VPC specified by aws_vpc.main.id. This allows us to manage DNS records privately within the VPC.
+We pointed all instance's private IP to it's hostname. Also, we have added CNAME record in the private Route 53 zone for the subdomain "backend.ashna.local". It points the CNAME record to the RDS address specified as "wordpress-db.cyhsysz4vqez.ap-south-1.rds.amazonaws.com". Requests to "backend.ashna.local" will be redirected to the specified RDS address.
+
 ```
 -------------------------------------------------------------------
 Pointing blog.ashna.online to eip
