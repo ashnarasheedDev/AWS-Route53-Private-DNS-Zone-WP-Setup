@@ -615,3 +615,65 @@ output "webserver_url" {
   value = "https://${var.frontend_hostname}.${var.domain_name}"
 }
 ```
+Now you can follow below steps to setup the wordpress application
+
+- Connect to the bastion host:
+
+    Use SSH to connect to the bastion host using the private key associated with the EC2 instance.
+    Once connected to the bastion host, you'll have a secure entry point to access other instances using local dns names within your private network.
+
+- Install and configure WordPress on the frontend server:
+
+    Update the frontend server with the necessary software packages.
+    Install a web server (such as Apache or Nginx) and PHP on the frontend server.
+    Download and configure WordPress on the frontend server.
+    Set up the WordPress configuration to connect to the RDS database.
+    Customize the WordPress installation as desired.
+
+Access the WordPress application:
+
+    After configuring WordPress, you can access the application by visiting the public IP or domain associated with the frontend server in a web browse
+    
+
+### Result
+
+Here I was able to access Application server usig custom domain names from Bastion
+
+~~~
+[ec2-user@bastion ~]$ ssh -i aws.pem ec2-user@frontend.ashna.local
+
+A newer release of "Amazon Linux" is available.
+  Version 2023.0.20230503:
+  Version 2023.0.20230517:
+Run "/usr/bin/dnf check-release-update" for full release and version update info
+   ,     #_
+   ~\_  ####_        Amazon Linux 2023
+  ~~  \_#####\
+  ~~     \###|
+  ~~       \#/ ___   https://aws.amazon.com/linux/amazon-linux-2023
+   ~~       V~' '->
+    ~~~         /
+      ~~._.   _/
+         _/ _/
+       _/m/'
+Last login: Fri May 26 10:57:10 2023 from 10.1.53.208
+[ec2-user@frontend ~]$ 
+```
+
+Connection to RDS from frontend server succeeded
+
+```
+[ec2-user@frontend ~]$ mysql -u wp_user -h backend.ashna.local -p
+Enter password: 
+Welcome to the MariaDB monitor.  Commands end with ; or \g.
+Your MariaDB connection id is 228
+Server version: 10.6.10-MariaDB managed by https://aws.amazon.com/rds/
+
+Copyright (c) 2000, 2018, Oracle, MariaDB Corporation Ab and others.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+MariaDB [(none)]> 
+```
+
+You can use userdata files to provision instances as well.
