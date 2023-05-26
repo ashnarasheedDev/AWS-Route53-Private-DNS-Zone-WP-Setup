@@ -653,7 +653,7 @@ Access the WordPress application:
 
 Here I was able to access Application server usig custom domain names from Bastion
 
-~~~
+```
 [ec2-user@bastion ~]$ ssh -i aws.pem ec2-user@frontend.ashna.local
 
 A newer release of "Amazon Linux" is available.
@@ -691,6 +691,7 @@ MariaDB [(none)]>
 ```
 
 You can use userdata files to provision instances as well.
+
 
 > <b>frontend.sh</b>
 
