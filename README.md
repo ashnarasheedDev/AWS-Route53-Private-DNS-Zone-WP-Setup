@@ -505,3 +505,113 @@ resource "aws_route53_record" "frontend" {
 }
 
 ```
+> <b> Create variables.tf</b>
+
+```
+variable "ami_id" {
+
+  description = "ami id of amazon linux"
+  type        = string
+  default     = "ami-0c768662cc797cd75"
+
+}
+
+variable "instance_type" {
+  description = "ec2 instance type"
+  type        = string
+  default     = "t2.micro"
+
+}
+
+variable "project_name" {
+  description = "your project name"
+  type        = string
+  default     = "zomato"
+}
+
+variable "project_environment" {
+  description = "project environment"
+  type        = string
+  default     = "dev"
+}
+
+variable "aws_region" {
+   default = "ap-south-1"
+}
+
+variable "vpc_cidr" {
+  default = "10.1.0.0/16"
+  type    = string
+}
+variable "domain_name" {
+  default = "ashna.online"
+}
+
+variable "frontend_hostname" {
+  default = "blog"
+}
+
+```
+
+><b>Create outputs.tf</b>
+
+```
+output "az1" {
+  value = data.aws_availability_zones.azs.names[0]
+
+}
+
+output "az2" {
+  value = data.aws_availability_zones.azs.names[1]
+
+}
+
+output "az3" {
+  value = data.aws_availability_zones.azs.names[2]
+
+}
+
+output "subnet1" {
+  value = cidrsubnet(var.vpc_cidr, 3, 0)
+}
+
+output "subnet2" {
+  value = cidrsubnet(var.vpc_cidr, 3, 1)
+}
+
+output "subnet3" {
+  value = cidrsubnet(var.vpc_cidr, 3, 2)
+}
+
+output "subnet4" {
+  value = cidrsubnet(var.vpc_cidr, 3, 3)
+}
+
+output "subnet5" {
+  value = cidrsubnet(var.vpc_cidr, 3, 4)
+}
+
+output "subnet6" {
+  value = cidrsubnet(var.vpc_cidr, 3, 5)
+}
+output "frontend-public-ip" {
+  value = aws_eip.frontend.public_ip
+}
+
+output "frontend-private-ip" {
+  value = aws_instance.frontend.private_ip
+}
+
+output "bastion-public-ip" {
+  value = aws_instance.bastion.public_ip
+}
+
+output "bastion-private-ip" {
+  value = aws_instance.bastion.private_ip
+}
+
+
+output "webserver_url" {
+  value = "https://${var.frontend_hostname}.${var.domain_name}"
+}
+```
