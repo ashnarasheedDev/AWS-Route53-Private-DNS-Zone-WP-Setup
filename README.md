@@ -212,4 +212,293 @@ resource "aws_nat_gateway" "nat" {
   depends_on = [aws_internet_gateway.igw]
 }
 ```
+### Step 2 - Create keypair and SG for each instances
 
+```
+-------------------------------------------------------------------
+Creating keypair and downloading to local end
+-------------------------------------------------------------------
+
+resource "tls_private_key" "mykey" {
+  algorithm = "RSA"
+  rsa_bits  = 4096
+}
+
+resource "aws_key_pair" "mykey" {
+  key_name   = "${var.project_name}_${var.project_environment}" # Create "myKey" to AWS
+  public_key = tls_private_key.mykey.public_key_openssh
+}
+resource "local_file" "mykey" {
+  filename        = "${var.project_name}-${var.project_environment}.pem"
+  content         = tls_private_key.mykey.private_key_pem
+  file_permission = "400"
+}
+
+-------------------------------------------------------------------
+Creating sg for bastion server
+-------------------------------------------------------------------
+
+resource "aws_security_group" "bastion" {
+  name_prefix = "${var.project_name}-${var.project_environment}-bastion-"
+  description = "Allow SSH from myIP"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port        = 22
+    to_port          = 22
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.project_environment}-bastion"
+
+  }
+  lifecycle {
+
+    create_before_destroy = true
+  }
+}
+-------------------------------------------------------------------
+Creating sg for frontend server
+-------------------------------------------------------------------
+
+resource "aws_security_group" "frontend" {
+  name_prefix = "${var.project_name}-${var.project_environment}-frontend-"
+  description = "Allow HTTPS&HTTP from all and SSH from bastion"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    security_groups = [aws_security_group.bastion.id]
+
+  }
+
+  ingress {
+    from_port        = 80
+    to_port          = 80
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  ingress {
+    from_port        = 443
+    to_port          = 443
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.project_environment}-frontend"
+
+  }
+  lifecycle {
+
+    create_before_destroy = true
+  }
+}
+
+-------------------------------------------------------------------
+Creating sg for AWS RDS
+-------------------------------------------------------------------
+
+resource "aws_security_group" "backend" {
+  name_prefix = "${var.project_name}-${var.project_environment}-backend-"
+  description = "Allow SSH from myIP"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    security_groups = [aws_security_group.bastion.id]
+  }
+
+  ingress {
+    from_port       = 3306
+    to_port         = 3306
+    protocol        = "tcp"
+    security_groups = [aws_security_group.frontend.id]
+  }
+
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.project_environment}-backend"
+
+  }
+  lifecycle {
+
+    create_before_destroy = true
+  }
+}
+```
+
+### Step 3 - Create 2 instances(webserver instance, bastion instance) & RDS
+
+```
+-------------------------------------------------------------------
+Creating webserver instance
+-------------------------------------------------------------------
+
+resource "aws_instance" "frontend" {
+
+  ami                    = var.ami_id
+  instance_type          = var.instance_type
+  key_name               = aws_key_pair.mykey.key_name
+  vpc_security_group_ids = [aws_security_group.frontend.id]
+  user_data              = file("frontend.sh")
+  subnet_id              = aws_subnet.publicsubnets[0].id
+
+  tags = {
+    Name = "${var.project_name}-${var.project_environment}-frontend"
+  }
+}
+
+-------------------------------------------------------------------
+Creating bastion instance
+-------------------------------------------------------------------
+
+resource "aws_instance" "bastion" {
+
+  ami                    = var.ami_id
+  instance_type          = var.instance_type
+  key_name               = aws_key_pair.mykey.key_name
+  vpc_security_group_ids = [aws_security_group.bastion.id]
+  subnet_id              = aws_subnet.publicsubnets[1].id
+  tags = {
+    Name = "${var.project_name}-${var.project_environment}-bastion"
+  }
+}
+```
+> <b>Create AWS RDS</b>
+
+It includes the creation of an RDS subnet group and an RDS instance.
+
+aws_db_subnet_group resource: It creates an RDS subnet group with the name "rds_subnet".
+The subnet_ids attribute specifies the IDs of the subnets where the RDS instance will be deployed. It references the IDs of two subnets using the aws_subnet.privatesubnets[0].id and aws_subnet.privatesubnets[1].id variables.
+
+This configuration will provision an RDS instance with the specified settings and associate it with the specified subnets and security group(s).
+
+```
+-------------------------------------------------------------------
+Create RDS
+-------------------------------------------------------------------
+
+resource "aws_db_subnet_group" "subnet_rds" {
+  name       = "rds_subnet"
+subnet_ids = [
+    aws_subnet.privatesubnets[0].id,
+    aws_subnet.privatesubnets[1].id
+  ] 
+}
+
+resource "aws_db_instance" "rds" {
+  engine               = "mariadb"
+  instance_class       = "db.t2.micro"
+  allocated_storage    = 10
+  storage_type         = "gp2"
+  identifier           = "wordpress-db"
+  username             = "wp_user"
+  password             = "********"
+  db_subnet_group_name = aws_db_subnet_group.subnet_rds.name
+  vpc_security_group_ids = [aws_security_group.backend.id]
+}
+```
+### Step 4 - Configuring Route53
+
+```
+-------------------------------------------------------------------
+Pointing blog.ashna.online to eip
+-------------------------------------------------------------------
+
+resource "aws_route53_record" "blog" {
+  zone_id = data.aws_route53_zone.myzone.id
+  name    = "blog"
+  type    = "A"
+  ttl     = 300
+  records = [aws_eip.frontend.public_ip]
+}
+
+-------------------------------------------------------------------
+Creating a private zone ashna.local
+-------------------------------------------------------------------
+
+resource "aws_route53_zone" "private" {
+  name = "ashna.local"
+
+  vpc {
+    vpc_id = aws_vpc.main.id
+  }
+}
+
+-------------------------------------------------------------------
+Pointing bastion.ashna.local to bastion's private ip
+-------------------------------------------------------------------
+
+resource "aws_route53_record" "bastion" {
+  zone_id = aws_route53_zone.private.zone_id
+  name    = "bastion"
+  type    = "A"
+  ttl     = 300
+  records = [aws_instance.bastion.private_ip]
+}
+
+
+-------------------------------------------------------------------
+Pointing backend.ashna.local to RDS address
+-------------------------------------------------------------------
+
+resource "aws_route53_record" "backend" {
+  zone_id = aws_route53_zone.private.zone_id
+  name    = "backend"
+  type    = "CNAME"
+  ttl     = 300
+  records = [aws_db_instance.rds.address]
+}
+
+
+-------------------------------------------------------------------
+Pointing frontend.ashna.local to frontend's private ip
+-------------------------------------------------------------------
+
+resource "aws_route53_record" "frontend" {
+  zone_id = aws_route53_zone.private.zone_id
+  name    = "frontend"
+  type    = "A"
+  ttl     = 300
+  records = [aws_instance.frontend.private_ip]
+}
+
+```
